@@ -3,7 +3,7 @@ package Tk::LabPopEntry;
 require Tk::LabEntry;
 
 @ISA = qw(Tk::Derived Tk::LabEntry);
-$VERSION = 0.01;
+$VERSION = 0.02;
 
 Construct Tk::Widget 'LabPopEntry';
 
@@ -24,15 +24,15 @@ sub Populate{
    # The default menu items
    if(!defined($menuitems)){
       $menuitems = [
-         ["Cut",'CutToClip','<Control-x>',2],
-         ["Copy",'CopyToClip','<Control-c>',0],
-         ["Paste",'PasteFromClip','<Control-v>',0],
-         ["Delete",'DeleteSelected','<Control-d>',0],
-         ["Select All",'SelectAll','<Control-a>',7],
+         ["Cut",     'Tk::LabPopEntry::cutToClip',      '<Control-x>', 2],
+         ["Copy",    'Tk::LabPopEntry::copyToClip',     '<Control-c>', 0],
+         ["Paste",   'Tk::LabPopEntry::pasteFromClip',  '<Control-v>', 0],
+         ["Delete",  'Tk::LabPopEntry::deleteSelected', '<Control-d>', 0],
+         ["Sel. All",'Tk::LabPopEntry::selectAll',      '<Control-a>', 7],
       ];
    }
    
-   $dw->Advertise('toplevel' => $menu);
+   $dw->Advertise('popupmenu' => $menu);
    
    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    # The -entry and -menu options are for convenience, but are not generally 
@@ -52,23 +52,30 @@ sub Populate{
       DEFAULT     => [$dw],
    );
     
-   $dw->SetBindings($entry);
+   $dw->setBindings($entry, $menuitems);
 }
 
 # Set the default bindings
-sub SetBindings{
-   my($dw, $entry) = @_;
+sub setBindings{
+   my($dw, $entry, $menuitems) = @_;
       
-   $entry->bind("<Key>", sub{ $dw->Validate($entry)} );
-   $entry->bind("<Button-3>", sub{ $dw->DisplayMenu($entry)} );
-   $entry->bind("<Button-1>", sub{ $dw->WithdrawMenu($entry)} );
+   $entry->bind("<Key>", sub{ $dw->validate($entry)} );
+   $entry->bind("<Button-3>", sub{ $dw->displayMenu($entry)} );
+   $entry->bind("<Button-1>", sub{ $dw->withdrawMenu($entry)} );
+
+   # Set the bindings for the default menu items
+   foreach my $item(@$menuitems){
+      $callback = $item->[1];
+      $binding  = $item->[2];
+		$dw->bind($binding, \$callback);
+   }
 }
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Validate the Entry widget's value as the user types in data.  This is tied
-# to the 'Key' event, set in the 'SetBindings' method.
+# to the 'Key' event, set in the 'setBindings' method.
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-sub Validate{
+sub validate{
    my($dw, $entry) = @_;
    
    my $pattern = $dw->cget(-pattern);
@@ -91,11 +98,11 @@ sub Validate{
    my $string = $entry->get;
    my $oldString = substr($string,0,$length-1);
    
-   # Check for whitespaces if the 'nospace' option is set
-   if( ($nospace == 1) && ($string =~ /^\S*\s+$/) ){
-      $dw->bell;
-      $dw->Restore(-entry=>$entry, -oldval=>$oldString);
-      return;
+   if($nospace){
+      if($string =~ /^\s*$/){ 
+         $dw->bell;
+         return 0;
+      }
    }
    
    # Change all characters to uppercase or lowercase if appropriate
@@ -114,6 +121,10 @@ sub Validate{
       if($nospace){ $pattern = '^?\.?\d*\.?\d*?$' }
       else{ $pattern = '^\s*?\.?\d*\.?\d*?\s*?$' }
    }
+   elsif($pattern =~ /alphanum/i){
+      if($nospace){ $pattern = '^[A-Za-z0-9]*$' }
+      else{ $pattern = '^\s*[A-Za-z0-9]*\s*$' }
+   }
    elsif($pattern =~ /alpha/i){
       if($nospace){ $pattern = '^[A-Za-z]*$' }
       else{ $pattern = '^\s*[A-Za-z]*\s*$' }
@@ -128,14 +139,16 @@ sub Validate{
    }
    # Check for a user-defined pattern
    elsif($dw->cget(-pattern)){ $pattern = $dw->cget(-pattern) }
+   #else{} # do nothing
    
-   #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   # If the string doesn't match the pattern, replace it with the old
-   # string and ring the bell.  Otherwise, allow the new value.
+   #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   # If the string entered by the user doesn't match the pattern, replace 
+   # it with the old string and ring the bell.  Otherwise, allow the new 
+   # value.
    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    if( defined($pattern) ){
       unless($string =~ /$pattern/){
-         $dw->Restore(-entry=>$entry, -oldval=>$oldString);
+         $dw->restore(-entry=>$entry, -oldval=>$oldString);
          return;
       }
    }
@@ -146,16 +159,16 @@ sub Validate{
    # 'minvalue' is not perfect, as it could fail on the first number.
    #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    if(defined($maxValue) && ($string > $maxValue)){
-      $dw->Restore(-entry=>$entry, -oldval=>$oldString);
+      $dw->restore(-entry=>$entry, -oldval=>$oldString);
       return;
    }
    if(defined($minValue) && ($string < $minValue)){
-      $dw->Restore(-entry=>$entry, -oldval=>$oldString);
+      $dw->restore(-entry=>$entry, -oldval=>$oldString);
       return;
    }
 
    if(defined($maxwidth) && (length($string) > $maxwidth)){
-      $dw->Restore(-entry=>$entry, -oldval=>$oldString);
+      $dw->restore(-entry=>$entry, -oldval=>$oldString);
       return;
    }
    
@@ -165,7 +178,7 @@ sub Validate{
 }
 
 # Restore the original string if a validation check fails.
-sub Restore{
+sub restore{
    my($dw, %args) = @_;
    
    my $entry  = delete $args{-entry};
@@ -181,7 +194,7 @@ sub Restore{
 # the -menuitems option.  There are five options by default, found in the
 # 'Populate()' method above.
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-sub DisplayMenu{
+sub displayMenu{
    my($dw,$entry) = @_;
    
    if($dw->cget(-nomenu) != 0){ return }
@@ -189,7 +202,7 @@ sub DisplayMenu{
    my $menu = $dw->cget(-menu);
    my $menuitems = $dw->cget(-menuitems);
 
-   if(Tk::Exists($menu)){ $dw->WithdrawMenu }
+   if(Tk::Exists($menu)){ $dw->withdrawMenu }
    
    # Create the menu item buttons
    foreach my $item(@$menuitems){
@@ -205,17 +218,15 @@ sub DisplayMenu{
       );
       
       # Disable the default menu items initially.
-      if($string =~ /Cut|Copy|Paste|Delete|Select.All/i){
+      if($string =~ /Cut|Copy|Paste|Delete|Sel.*?All/i){
          $dw->{"mb_$string"}->configure(-state=>'disabled');
       }
-      
-      $entry->bind($binding, \$callback);
    }
    
    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    # Perform some additional configuration options and pack the buttons onto
    # the screen.  Note that all buttons are disabled by default, and enabled
-   # later in the 'SetState()' method.
+   # later in the 'setState()' method.
    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    foreach my $item (@$menuitems){
       $button = $dw->{"mb_$item->[0]"};
@@ -231,7 +242,7 @@ sub DisplayMenu{
    }
    
    # Check for state each time the menu appears
-   $dw->SetState;
+   $dw->setState;
    
    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    # I like this bit of code.  This 'snaps' the pull down to the bottom left
@@ -249,7 +260,7 @@ sub DisplayMenu{
 }
 
 # Withdraw the menu and destroy any children to prevent "menu buildup".
-sub WithdrawMenu{
+sub withdrawMenu{
    my($dw,$entry) = @_;
    
    my $menu = $dw->cget(-menu);
@@ -268,41 +279,94 @@ sub WithdrawMenu{
 # below.  Note that any non-default menu-items should automatically have 
 # their state set to 'normal'.
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-sub SetState{
+sub setState{
    my $dw = shift; 
+   my($entry, $entryVal, $selection, $clipboard);
+
+   # For bind operations, the Entry widget is actually the first arg passed
+   if(ref($dw) eq "Tk::Entry"){ 
+      $entry = $dw;
+      $dw = $entry->parent;
+   }
+   else{ $entry = $dw->cget(-entry) }
+
    my $menuitems = $dw->cget(-menuitems);
-   my $entry = $dw->cget(-entry); 
-   my $entryVal = $entry->get;
-   
-   my $selection = GetSelection($dw, 'PRIMARY');
-   my $clipboard = GetSelection($dw, 'CLIPBOARD');
-     
+
+   $entryVal  = $entry->get;
+   $selection = getSelection($dw, 'PRIMARY');
+   $clipboard = getSelection($dw, 'CLIPBOARD');
+
+   foreach my $item(@$menuitems){
+      if($item->[0] =~ /Cut|Copy|Paste|Delete|Sel. All/){
+         eval{$dw->{"mb_$item->[0]"}->configure(-state=>'disabled')};
+      }
+   }
+
    #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    # Only set state to 'normal' for default items if clipboard is
    # not empty or selection is present.
    #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   if(($clipboard) && ($dw->{"mb_Paste"}->cget(-state) ne 'normal') ){
-         $dw->{mb_Paste}->configure(-state=>'normal');
+   if(($clipboard) && ($dw->{mb_Paste})){
+      eval{$dw->{mb_Paste}->configure(-state=>'normal')};
    }
-   if(($selection) && ($dw->{"mb_Cut"}->cget(-state) ne 'normal') ){
-      $dw->{mb_Cut}->configure(-state=>'normal');
+   if(($selection) && ($dw->{mb_Cut})){
+      eval{$dw->{mb_Cut}->configure(-state=>'normal')};
    }
-   if(($selection) && ($dw->{"mb_Copy"}->cget(-state) ne 'normal') ){
-      $dw->{mb_Copy}->configure(-state=>'normal');
+   if(($selection) && ($dw->{mb_Copy})){
+      eval{$dw->{mb_Copy}->configure(-state=>'normal')};
    }
-   if(($selection) && ($dw->{"mb_Delete"}->cget(-state) ne 'normal') ){
-      $dw->{mb_Delete}->configure(-state=>'normal');
+   if(($selection) && ($dw->{mb_Delete})){
+      eval{$dw->{mb_Delete}->configure(-state=>'normal')};
    }
-   if(($entryVal) && ($dw->{"mb_Select All"}->cget(-state) ne 'normal') ){
-      $dw->{"mb_Select All"}->configure(-state=>'normal');
+   if(($entry) && ($dw->{"mb_Sel. All"}) && ($selection eq "") && ($entry->get ne "")){
+      eval{$dw->{"mb_Sel. All"}->configure(-state=>'normal')};
+   }
+
+   return;
+
+
+   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   # Only set state to 'normal' for default items if clipboard is
+   # not empty or selection is present.
+   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   if(defined $dw->{"mb_Paste"}){
+      if(($clipboard) && ($dw->{"mb_Paste"}->cget(-state) ne 'normal')){
+         eval{ $dw->{mb_Paste}->configure(-state=>'normal') };
+      }
+   }
+   if(defined $dw->{"mb_Cut"}){
+      if(($selection) && ($dw->{"mb_Cut"}->cget(-state) ne 'normal')){
+         eval{ $dw->{mb_Cut}->configure(-state=>'normal') };
+      }
+   }
+   if(defined $dw->{"mb_Copy"}){
+      if(($selection) && ($dw->{"mb_Copy"}->cget(-state) ne 'normal')){
+         eval{ $dw->{mb_Copy}->configure(-state=>'normal') };
+      }
+   }
+   if(defined $dw->{"mb_Delete"}){
+      if(($selection) && ($dw->{"mb_Delete"}->cget(-state) ne 'normal')){
+         eval{ $dw->{mb_Delete}->configure(-state=>'normal') };
+      }
+   }
+   if(defined $dw->{"mb_Sel. All"}){
+      if(($entryVal) && ($dw->{"mb_Sel. All"}->cget(-state) ne 'normal')){
+         eval{ $dw->{"mb_Sel. All"}->configure(-state=>'normal') };
+      }
    }   
 }
 
 # Get the selected contents of the Entry widget
-sub GetSelection{
+sub getSelection{
    my($dw, $selectionType) = @_;
-   my $entry = $dw->cget(-entry);
-   my $string;
+   my($entry,$string);
+
+   # For bind operations, the Entry widget is actually the first arg passed
+   if(ref($dw) eq "Tk::Entry"){ 
+		$entry = $dw;
+      $dw = $entry->parent;
+   }
+   else{ $entry = $dw->cget(-entry) }
 
    Tk::catch { $string = $entry->SelectionGet(-selection=>$selectionType) };
 
@@ -311,18 +375,31 @@ sub GetSelection{
 }
 
 # Select all the contents of the Entry widget
-sub SelectAll{
+sub selectAll{
    my $dw = shift;
-   my $entry = $dw->cget(-entry);
+
+   # For bind operations, the Entry widget is actually the first arg passed
+   if(ref($dw) eq "Tk::Entry"){ 
+		$entry = $dw;
+      $dw = $entry->parent;
+   }
+   else{ $entry = $dw->cget(-entry) }
+   
    $entry->selectionRange(0,'end');
-   $dw->SetState;
+   setState($dw);
 }
 
 # Get the selected contents of the Entry widget
-sub SetSelection{
+sub setSelection{
    my($dw,$selection) = @_;
-   my $entry = $dw->cget(-entry);
-   my $string;
+   my($entry,$string);
+
+   # For bind operations, the Entry widget is actually the first arg passed
+   if(ref($dw) eq "Tk::Entry"){ 
+		$entry = $dw;
+      $dw = $entry->parent;
+   }
+   else{ $entry = $dw->cget(-entry) }
 
    Tk::catch { $string = $entry->SelectionGet(-selection=>$selection) };
 
@@ -331,58 +408,182 @@ sub SetSelection{
 }
 
 # Append data to the clipboard
-sub SetClip{
+sub setClip{
     my ($dw,$string) = @_;
     $dw->clipboardClear;
     $dw->clipboardAppend('--', $string);
 }
 
 # Copy data to the clipboard
-sub CopyToClip{
-    my $dw = shift;
-    my $entry = $dw->cget(-entry);
-    if($entry->selectionPresent){ SetClip($dw, GetSelection($dw,'PRIMARY')) }
-    $dw->WithdrawMenu;
+sub copyToClip{
+   my $dw = shift;
+   my $entry;
+
+   # For bind operations, the Entry widget is actually the first arg passed
+   if(ref($dw) eq "Tk::Entry"){ 
+		$entry = $dw;
+      $dw = $entry->parent;
+   }
+   else{ $entry = $dw->cget(-entry) }
+
+   if($entry->selectionPresent){ setClip($dw, getSelection($dw,'PRIMARY')) }
+   $dw->withdrawMenu;
 }
 
 # Automatically put cut or deleted data into the clipboard
-sub CutToClip{
-    my $dw = shift;
-    my $entry = $dw->cget(-entry);
-    if($entry->selectionPresent){ SetClip($dw, DeleteSelected($dw)) }
-    $dw->WithdrawMenu;
+sub cutToClip{
+   my $dw = shift;
+   my $entry;
+
+   # For bind operations, the Entry widget is actually the first arg passed
+   if(ref($dw) eq "Tk::Entry"){ 
+      $entry = $dw;
+      $dw = $entry->parent;
+   }
+   else{ $entry = $dw->cget(-entry) }
+
+   if($entry->selectionPresent){ setClip($dw, deleteSelected($dw)) }
+   $dw->withdrawMenu;
 }
 
 # Delete selected text
-sub DeleteSelected{
-    my $dw = shift;
-    my $entry = $dw->cget(-entry);
-    my $deleted_string;
+sub deleteSelected{
+   my $dw = shift;
+   my($entry, $deleted_string);
 
-    if($entry->selectionPresent){
+   # For bind operations, the Entry widget is actually the first arg passed
+   if(ref($dw) eq "Tk::Entry"){ 
+      $entry = $dw;
+      $dw = $entry->parent;
+   }
+   else{ $entry = $dw->cget(-entry) }
+  	   
+   if($entry->selectionPresent){
       my $from = $entry->index('sel.first');
-	   my $to = $entry->index('sel.last');
+      my $to = $entry->index('sel.last');
 	   $deleted_string = substr($entry->get, $from, $to-$from);
 	   $entry->delete($from,$to);
-    }
-    $dw->WithdrawMenu;
-    return $deleted_string;
+   }
+   $dw->withdrawMenu;
+   
+   return $deleted_string;
 }
 
 # Paste data from the clipboard into the Entry widget
-sub PasteFromClip{
-    my $dw = shift;
-    my $entry = $dw->cget(-entry);
-    my $from = $entry->index('insert');
+sub pasteFromClip{
+   my $dw = shift;
+   my $entry;
 
-    if($entry->selectionPresent){
-	   $from = $entry->index('sel.first');
-	   DeleteSelected($dw);
-    }
+   # For bind operations, the Entry widget is actually the first arg passed
+   if(ref($dw) eq "Tk::Entry"){ 
+      $entry = $dw;
+      $dw = $entry->parent;
+   }
+   else{ $entry = $dw->cget(-entry) }
 
-    $entry->insert($from,GetSelection($dw,'CLIPBOARD'));
-    $dw->WithdrawMenu;
+   my $from = $entry->index('insert');
+
+   if($entry->selectionPresent){
+	  $from = $entry->index('sel.first');
+	  deleteSelected($dw);
+   }
+
+   $entry->insert($from,getSelection($dw,'CLIPBOARD'));
+   $dw->withdrawMenu;
 }
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Add an item to the popup menu at the specified index.  The 'item' passed 
+# is a reference to an anon. array that contains four items (in this order):
+# 
+# 1 - A label
+# 2 - A callback associated with that label
+# 3 - The bind event associated with that callback
+# 4 - The 'underline' index value associated with the callback
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+sub addItem{
+   my($dw, $index, $item) = @_;
+   
+   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   # Permit the programmer to omit an index, in which case the item will be
+   # added to the end of the menu.
+   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   if(ref($index) =~ /array/i){
+      $item = $index;
+      $index = 'end';
+   }
+   
+   my $menu = $dw->cget(-menu);
+   my $menuitems = $dw->cget(-menuitems);
+   
+   my $callback = $item->[1];
+   my $binding  = $item->[2];
+   
+   my $length = scalar(@$menuitems);
+   
+   #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   # If index is not specified, 'end', or greater than the number of elements, 
+   # just push it onto the end of the menuitem array.  
+   #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   if( ($index eq 'end') || ($index > $length) ){ push(@$menuitems, $item) }
+   
+   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   # If the index *is* specified, use a temporary array to hold the removed
+   # elements using splice, insert the item, then push the temporary array
+   # back onto the original array.
+   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   else{
+      for(my $n = 0; $n < $length + 1; $n++){
+         if($index == $n){
+            my @temp = splice @$menuitems, $n;
+            @$menuitems[$n] = $item;
+            push(@$menuitems, @temp);
+         }
+      }
+   }
+   
+   # Bind the item to the callback
+   $dw->bind($binding, \$callback);
+
+   return $menuitems;          
+}
+
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Delete an item from the menu based on the index passed.  The index 'end' may
+# also be used as a valid index.  A group of items may be deleted as well.
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+sub deleteItem{
+   my($dw, $index, $last) = @_;
+   
+   # Make sure an index is supplied, or things could get ugly.
+   if($index eq ""){ die "\nNo index supplied to 'deleteItem'" }
+      
+   my $menuitems = $dw->cget(-menuitems);
+   my $length = scalar(@$menuitems);
+   
+   # Accept 'end' as a valid argument
+   if($index eq 'end'){ $index = $length - 1 }
+   if($last eq 'end'){ $last = $length }
+   
+   # Ensure that the first index is less than the second
+   if( (defined $last) && ($last < $index) ){ 
+      die "\nThe second index must be greater than the first";
+   }
+   
+   my $numItems = $last - $index;
+   
+   # Remove a single item or group of items, as appropriate
+   for(my $n = 0; $n < $length; $n++){
+      if(($index == $n) && ($last eq "")){ 
+         my $spliced = splice @$menuitems, $n, 1;
+         return $spliced;
+      }
+      if(($index == $n) && ($last ne "")){
+         my @spliced = splice @$menuitems, $n, $numItems;
+         return \@spliced;
+      } 
+   }
+}   
 1;
 __END__
 =head1 LabPopEntry
@@ -394,12 +595,12 @@ menu built in, plus input masks.
 
   use LabPopEntry
   $dw = $parent->LabPopEntry(
-      -pattern   => 'alpha', 'capsonly', 'signed_int', 'unsigned_int', 'float',
-                 'nondigit', or any supplied regexp.
+      -pattern   => 'alpha', 'alphanum', 'capsonly', 'signed_int', 
+                 'unsigned_int', 'float', 'nondigit', or any supplied regexp.
       -nomenu    => 0 or 1,
       -case      => 'upper', 'lower', 'capitalize',
       -maxwidth  => int,
-      -minwidth  => int,
+      -minvalue  => int,
       -maxvalue  => int,
       -nospace   => 0 or 1,
       -menuitems => ['string', 'callback', 'binding', 'index'],
@@ -471,16 +672,21 @@ index 0.
 explicitly bind it yourself.  Your callback will automatically be bound to
 the event sequence you specified.
 
-=head1 NOTES
-This widget is functionally identical to the PopEntry widget, with the exception
-that a label may be added since it is derived from a LabEntry widget rather than
-an Entry widget.
+=head1 METHODS
 
-In terms of code, this widget was completely re-written.  I am now using a 
-'Key' binding to check for validation, rather than overloading the 'insert'
-method of the Entry widget.  Also, the toplevel menu is now available as an
-advertised subwidget, making for much easier configuration of the right-click
-menu.
+deleteItem(index, ?index?)
+
+   Deletes the menu option at the specified index.  A range of values may be
+deleted as well, e.g. $dw->deleteItem(3,'end');  Returns an array reference
+if a single item is deleted, or a reference to an array of references if more
+than one item is deleted.
+
+addItem(?index?, $item)
+   Adds a menu option at the specified index, where $item is an anonymous array
+consisting of four elements (see the -menuitems option for details).  If no 
+index is specified, the new item will be added at the end of the menu.  If an
+item already exists at that index, the current menu items will be 
+"bumped" down.  Returns the list of menuitems.
    
 =head1 KNOWN BUGS
 
@@ -489,14 +695,15 @@ word is supplied.
 
 The -minvalue only works for the first digit.
 
-Possible to have a leading '.' and a following '.' in a float
+It's possible to have a leading '.' and a following '.' in a float
+
+There is a bug with the 'delete' bind (Control-d).  It won't necessarily pick
+up the selection for some reason, and in some cases deletes individual
+characters per key-press, rather than the entire selection.  Weird.
 
 =head1 PLANNED CHANGES
 
 Fix the issues mentioned above.
-
-Allow individual entries to be added or removed from the menu via predefined
-methods.
 
 =head1 AUTHOR
 
@@ -505,7 +712,7 @@ djberg96@hotmail.com
 
 =head1 SEE ALSO
 
-Entry, PopEntry
+Entry
 
 =cut
 
