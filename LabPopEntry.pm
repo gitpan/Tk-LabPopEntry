@@ -3,7 +3,7 @@ package Tk::LabPopEntry;
 require Tk::LabEntry;
 
 @ISA = qw(Tk::Derived Tk::LabEntry);
-$VERSION = 0.02;
+$VERSION = 0.03;
 
 Construct Tk::Widget 'LabPopEntry';
 
@@ -59,9 +59,18 @@ sub Populate{
 sub setBindings{
    my($dw, $entry, $menuitems) = @_;
       
-   $entry->bind("<Key>", sub{ $dw->validate($entry)} );
+   $entry->bind("<Key>", sub{ $dw->validate($entry) } );
    $entry->bind("<Button-3>", sub{ $dw->displayMenu($entry)} );
    $entry->bind("<Button-1>", sub{ $dw->withdrawMenu($entry)} );
+
+   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   # Remove the bindings from the 'Control' and 'Alt' keys.  This is necessary
+   # to prevent a minor annoyance trying to manually cut, etc, with the keys.
+   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   $entry->bind("<Control_L>", sub{ Tk::NoOp });
+   $entry->bind("<Control_R>", sub{ Tk::NoOp });
+   $entry->bind("<Alt_L>", sub{ Tk::NoOp });
+   $entry->bind("<Alt_R>", sub{ Tk::NoOp });
 
    # Set the bindings for the default menu items
    foreach my $item(@$menuitems){
@@ -615,7 +624,7 @@ order to force the end-user into entering only the values you want him or her
 to enter.
 
 By default, there are five items attached to the right-click menu: Cut, Copy,
-Paste, Delete and Select All.  The default bindings for the items are ctrl-x,
+Paste, Delete and Sel. All.  The default bindings for the items are ctrl-x,
 ctrl-c, ctrl-v, ctrl-d, and ctrl-a, respectively.
 
 The difference between 'Cut' and 'Delete' is that the former automatically
@@ -627,6 +636,7 @@ copies the contents that were cut to the clipboard, while the latter does not.
    The pattern specified here creates an input mask for the LabPopEntry widget.
 There are six pre-defined masks:
 alpha - Upper and lower case a-z only.
+alphanum - Alpha-numeric characters only.
 capsonly - Upper case A-Z only.
 nondigit - Any characters except 0-9.
 float - A float value, which may or may not include a decimal.
@@ -634,7 +644,8 @@ signed_int - A signed integer value, which may or may not include a '+'.
 unsigned_int - An unsigned integer value.
 
 You may also specify a regular expression of your own design using Perl's
-standard regular expression mechanisms.  Be sure to use single quotes.
+standard regular expression mechanisms.  Be sure to use single quotes, e.g.
+ '/\d\w\d/'
 
 -nomenu
    If set to true, then no right-click menu will appear.  Presumably, you would
@@ -647,7 +658,7 @@ words within that LabPopEntry widget.
 -maxwidth
    Specifies the maximum number of characters that the user can enter in that
 particular LabPopEntry widget.  Note that this is not the same as the width
-of the widget.
+of the widget itself.
 
 -maxvalue
    If one of the pre-defined numeric patterns is chosen, this specifies the
@@ -668,7 +679,7 @@ a binding for that option (see below),
 and an index value specifying where on the menu it should appear,  starting at 
 index 0.
 
-   The binding specified need only be in the form, '<ctrl-x>'.  You needn't
+   The binding specified need only be in the form, '<Control-x>'.  You needn't
 explicitly bind it yourself.  Your callback will automatically be bound to
 the event sequence you specified.
 

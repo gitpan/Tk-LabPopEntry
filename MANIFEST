@@ -1,6 +1,7 @@
 Changes
-LabPopEntry.pm
 MANIFEST
 Makefile.PL
+LabPopEntry.pm
 test.pl
-NOTES
+README
+README.html
