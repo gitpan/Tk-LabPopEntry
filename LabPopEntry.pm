@@ -1,9 +1,11 @@
 package Tk::LabPopEntry;
 
+use strict;
 require Tk::LabEntry;
 
+use vars qw(@ISA $VERSION);
 @ISA = qw(Tk::Derived Tk::LabEntry);
-$VERSION = 0.03;
+$VERSION = 0.04;
 
 Construct Tk::Widget 'LabPopEntry';
 
@@ -31,7 +33,7 @@ sub Populate{
          ["Sel. All",'Tk::LabPopEntry::selectAll',      '<Control-a>', 7],
       ];
    }
-   
+
    $dw->Advertise('popupmenu' => $menu);
    
    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -59,25 +61,35 @@ sub Populate{
 sub setBindings{
    my($dw, $entry, $menuitems) = @_;
       
-   $entry->bind("<Key>", sub{ $dw->validate($entry) } );
-   $entry->bind("<Button-3>", sub{ $dw->displayMenu($entry)} );
-   $entry->bind("<Button-1>", sub{ $dw->withdrawMenu($entry)} );
+   my($callback, $binding);
+   my $popupmenu = $dw->Subwidget('popupmenu');
 
-   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   $entry->bind("<Key>", sub{ $dw->validate } );
+
+   $entry->bind("<Button-3>",
+      sub{ $dw->displayMenu if(!$popupmenu->ismapped) },
+   );
+
+   $entry->bind("<Button-1>",
+      sub{ $dw->withdrawMenu if($popupmenu->ismapped) },
+   );
+
+   #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    # Remove the bindings from the 'Control' and 'Alt' keys.  This is necessary
    # to prevent a minor annoyance trying to manually cut, etc, with the keys.
-   #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    $entry->bind("<Control_L>", sub{ Tk::NoOp });
    $entry->bind("<Control_R>", sub{ Tk::NoOp });
-   $entry->bind("<Alt_L>", sub{ Tk::NoOp });
-   $entry->bind("<Alt_R>", sub{ Tk::NoOp });
+   $entry->bind("<Alt_L>",     sub{ Tk::NoOp });
+   $entry->bind("<Alt_R>",     sub{ Tk::NoOp });
 
    # Set the bindings for the default menu items
    foreach my $item(@$menuitems){
       $callback = $item->[1];
       $binding  = $item->[2];
-		$dw->bind($binding, \$callback);
+      $entry->bind($binding, \&$callback);
    }
+
 }
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -85,8 +97,9 @@ sub setBindings{
 # to the 'Key' event, set in the 'setBindings' method.
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 sub validate{
-   my($dw, $entry) = @_;
-   
+   my $dw = shift;
+
+   my $entry = $dw->cget(-entry);
    my $pattern = $dw->cget(-pattern);
    my $nospace = $dw->cget(-nospace);
    my $maxwidth = $dw->cget(-maxwidth);
@@ -118,37 +131,37 @@ sub validate{
    if($dw->cget(-case) eq "upper"){ $string =~ tr/a-z/A-Z/ }
    if($dw->cget(-case) eq "lower"){ $string =~ tr/A-Z/a-z/ }
    
-   if($pattern =~ /unsigned_int/i){
+   if($pattern =~ /^unsigned_int.*?$/i){
       if($nospace){ $pattern = '^\d*$' }
-      else{ $pattern = '^\s*\d*\s*$' }
+      else{ $pattern = '^(\s*\d*\s*)*$' }
    }  
-   elsif($pattern =~ /signed_int/i){
+   elsif($pattern =~ /^signed_int.*?$/i){
       if($nospace){ $pattern = '^[\+\-]?\d*$' }
-      else{ $pattern = '^\s*[\+\-]?\d*\s*$' }
+      else{ $pattern = '^(\s*[\+\-]?\d*\s*)*$' }
    }
-   elsif($pattern =~ /float/i){
-      if($nospace){ $pattern = '^?\.?\d*\.?\d*?$' }
-      else{ $pattern = '^\s*?\.?\d*\.?\d*?\s*?$' }
+   elsif($pattern =~ /^float.*?$/i){
+      if($nospace){ $pattern = '^-?\d*\.?\d*$' }
+      else{ $pattern = '^\s*?-?\d*\.?\d*\s*$' }
    }
-   elsif($pattern =~ /alphanum/i){
+   elsif($pattern =~ /^alphanum.*?$/i){
       if($nospace){ $pattern = '^[A-Za-z0-9]*$' }
-      else{ $pattern = '^\s*[A-Za-z0-9]*\s*$' }
+      else{ $pattern = '^(\s*?[A-Za-z0-9]*?\s*)*$' }
    }
-   elsif($pattern =~ /alpha/i){
+   elsif($pattern =~ /^alpha.*?$/i){
       if($nospace){ $pattern = '^[A-Za-z]*$' }
-      else{ $pattern = '^\s*[A-Za-z]*\s*$' }
+      else{ $pattern = '^(\s*[A-Za-z]*\s*)*$' }
    }
-   elsif($pattern =~ /capsonly/i){
+   elsif($pattern =~ /^capsonly.*?$/i){
       if($nospace){ $pattern = '^[A-Z]*$' }
-      else{ $pattern = '^\s*[A-Z]*\s*$' }
+      else{ $pattern = '^(\s*[A-Z]*\s*)*$' }
    }
-   elsif($pattern =~ /nondigit/i){
+   elsif($pattern =~ /^nondigit.*?$/i){
       if($nospace){ $pattern = '^\D*$' }
-      else{ $pattern = '^\s*\D*\s*$' }
+      else{ $pattern = '^(\s*\D*\s*)*$' }
    }
    # Check for a user-defined pattern
    elsif($dw->cget(-pattern)){ $pattern = $dw->cget(-pattern) }
-   #else{} # do nothing
+   else{} # do nothing
    
    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    # If the string entered by the user doesn't match the pattern, replace 
@@ -204,14 +217,20 @@ sub restore{
 # 'Populate()' method above.
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 sub displayMenu{
-   my($dw,$entry) = @_;
+   my $dw = shift;
+
+   my $entry = $dw->cget(-entry);
+
+   my($button,$string,$callback,$index,$binding);
    
    if($dw->cget(-nomenu) != 0){ return }
    
    my $menu = $dw->cget(-menu);
    my $menuitems = $dw->cget(-menuitems);
 
-   if(Tk::Exists($menu)){ $dw->withdrawMenu }
+   #if(Tk::Exists($menu)){ $dw->withdrawMenu }
+   my $popupmenu = $dw->Subwidget('popupmenu');
+   $dw->withdrawMenu if($popupmenu->ismapped);
    
    # Create the menu item buttons
    foreach my $item(@$menuitems){
@@ -219,6 +238,9 @@ sub displayMenu{
       $callback = $item->[1];
       $binding  = $item->[2];
       $index    = $item->[3];     
+
+      # Turn "<Control-x>" into "<Ctrl-x>"
+      if($binding =~ /^\<control\-(.)\>$/i){ $binding = "<Ctrl-$1>" }
       
       $dw->{"mb_$string"} = $menu->Button(
          -text       => "$string\t$binding",
@@ -242,7 +264,7 @@ sub displayMenu{
       $button->configure(-relief=>'flat', -padx=>0, -pady=>0, -anchor=>'w');
       $button->pack(-expand=>1, -fill=>'x');
       $button->bind("<Enter>", sub{
-            if($_[0]->cget('-state') ne "disabled"){
+         if($_[0]->cget('-state') ne "disabled"){
                $_[0]->configure(-relief=>'raised')
             }
          }
@@ -271,7 +293,7 @@ sub displayMenu{
 # Withdraw the menu and destroy any children to prevent "menu buildup".
 sub withdrawMenu{
    my($dw,$entry) = @_;
-   
+
    my $menu = $dw->cget(-menu);
    if($menu->state eq 'normal'){
       $menu->withdraw;
@@ -368,11 +390,12 @@ sub setState{
 # Get the selected contents of the Entry widget
 sub getSelection{
    my($dw, $selectionType) = @_;
+
    my($entry,$string);
 
    # For bind operations, the Entry widget is actually the first arg passed
    if(ref($dw) eq "Tk::Entry"){ 
-		$entry = $dw;
+      $entry = $dw;
       $dw = $entry->parent;
    }
    else{ $entry = $dw->cget(-entry) }
@@ -387,40 +410,17 @@ sub getSelection{
 sub selectAll{
    my $dw = shift;
 
+   my $entry;
+
    # For bind operations, the Entry widget is actually the first arg passed
    if(ref($dw) eq "Tk::Entry"){ 
-		$entry = $dw;
+      $entry = $dw;
       $dw = $entry->parent;
    }
    else{ $entry = $dw->cget(-entry) }
    
    $entry->selectionRange(0,'end');
    setState($dw);
-}
-
-# Get the selected contents of the Entry widget
-sub setSelection{
-   my($dw,$selection) = @_;
-   my($entry,$string);
-
-   # For bind operations, the Entry widget is actually the first arg passed
-   if(ref($dw) eq "Tk::Entry"){ 
-		$entry = $dw;
-      $dw = $entry->parent;
-   }
-   else{ $entry = $dw->cget(-entry) }
-
-   Tk::catch { $string = $entry->SelectionGet(-selection=>$selection) };
-
-   $string = '' unless defined $string;
-   return $string;
-}
-
-# Append data to the clipboard
-sub setClip{
-    my ($dw,$string) = @_;
-    $dw->clipboardClear;
-    $dw->clipboardAppend('--', $string);
 }
 
 # Copy data to the clipboard
@@ -430,16 +430,22 @@ sub copyToClip{
 
    # For bind operations, the Entry widget is actually the first arg passed
    if(ref($dw) eq "Tk::Entry"){ 
-		$entry = $dw;
+      $entry = $dw;
       $dw = $entry->parent;
    }
    else{ $entry = $dw->cget(-entry) }
 
-   if($entry->selectionPresent){ setClip($dw, getSelection($dw,'PRIMARY')) }
-   $dw->withdrawMenu;
+   if($entry->selectionPresent){
+      my $string = $entry->SelectionGet(-selection=>'PRIMARY');
+      $dw->clipboardClear;
+      $dw->clipboardAppend('--',$string);
+   }
+
+   my $popupmenu = $dw->Subwidget('popupmenu');
+   $dw->withdrawMenu if($popupmenu->ismapped);
 }
 
-# Automatically put cut or deleted data into the clipboard
+# Automatically put cut data into the clipboard
 sub cutToClip{
    my $dw = shift;
    my $entry;
@@ -451,13 +457,20 @@ sub cutToClip{
    }
    else{ $entry = $dw->cget(-entry) }
 
-   if($entry->selectionPresent){ setClip($dw, deleteSelected($dw)) }
-   $dw->withdrawMenu;
+   if($entry->selectionPresent){
+      my $string = deleteSelected($entry);
+      $entry->clipboardClear;
+      $entry->clipboardAppend('--', $string);
+   }
+
+   my $popupmenu = $dw->Subwidget('popupmenu');
+   $dw->withdrawMenu if($popupmenu->ismapped);
 }
 
 # Delete selected text
 sub deleteSelected{
    my $dw = shift;
+
    my($entry, $deleted_string);
 
    # For bind operations, the Entry widget is actually the first arg passed
@@ -466,14 +479,19 @@ sub deleteSelected{
       $dw = $entry->parent;
    }
    else{ $entry = $dw->cget(-entry) }
-  	   
-   if($entry->selectionPresent){
-      my $from = $entry->index('sel.first');
-      my $to = $entry->index('sel.last');
-	   $deleted_string = substr($entry->get, $from, $to-$from);
-	   $entry->delete($from,$to);
+
+   my($from,$to);
+   if( ($entry->selectionPresent) ){
+      $from = $entry->index('sel.first');
+      $to = $entry->index('sel.last');
+      $deleted_string = substr($entry->get, $from, $to-$from);
+      $entry->delete($from,$to);
    }
-   $dw->withdrawMenu;
+
+   #$dw->clipboardClear;
+
+   my $popupmenu = $dw->Subwidget('popupmenu');
+   $dw->withdrawMenu if($popupmenu->ismapped);
    
    return $deleted_string;
 }
@@ -481,7 +499,8 @@ sub deleteSelected{
 # Paste data from the clipboard into the Entry widget
 sub pasteFromClip{
    my $dw = shift;
-   my $entry;
+
+   my($entry, $from);
 
    # For bind operations, the Entry widget is actually the first arg passed
    if(ref($dw) eq "Tk::Entry"){ 
@@ -490,15 +509,18 @@ sub pasteFromClip{
    }
    else{ $entry = $dw->cget(-entry) }
 
-   my $from = $entry->index('insert');
-
    if($entry->selectionPresent){
-	  $from = $entry->index('sel.first');
-	  deleteSelected($dw);
+      $from = $entry->index('sel.first');
+      deleteSelected($dw);
    }
+   else{ $from = $entry->index('insert') }
 
-   $entry->insert($from,getSelection($dw,'CLIPBOARD'));
-   $dw->withdrawMenu;
+   my $string = getSelection($entry,'CLIPBOARD');
+
+   $entry->insert($from,$string);
+
+   my $popupmenu = $dw->Subwidget('popupmenu');
+   $dw->withdrawMenu if($popupmenu->ismapped);
 }
 
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -594,15 +616,18 @@ sub deleteItem{
    }
 }   
 1;
+
 __END__
-=head1 LabPopEntry
+
+
+=head1 NAME
 
 LabPopEntry - A LabEntry widget with an automatic, configurable right-click
 menu built in, plus input masks.
 
-=head1 SYNOPSIS
+=head2 SYNOPSIS
 
-  use LabPopEntry
+  use LabPopEntry;
   $dw = $parent->LabPopEntry(
       -pattern   => 'alpha', 'alphanum', 'capsonly', 'signed_int', 
                  'unsigned_int', 'float', 'nondigit', or any supplied regexp.
@@ -615,115 +640,169 @@ menu built in, plus input masks.
       -menuitems => ['string', 'callback', 'binding', 'index'],
    );
    $dw->pack;
-   
-=head1 DESCRIPTION
 
-LabPopEntry is a LabEntry widget with a right-click menu automatically attached.
-In addition, certain field masks can easily be applied to the entry widget in
-order to force the end-user into entering only the values you want him or her
-to enter.
+=head2 DESCRIPTION
+
+LabPopEntry is a LabEntry widget with a right-click menu automatically
+attached.  In addition, certain field masks can easily be applied to the entry
+widget in order to force the end-user into entering only the values you want
+him or her to enter.
 
 By default, there are five items attached to the right-click menu: Cut, Copy,
-Paste, Delete and Sel. All.  The default bindings for the items are ctrl-x,
-ctrl-c, ctrl-v, ctrl-d, and ctrl-a, respectively.
+Paste, Delete and Sel. All.  The default bindings for the items are Control-x,
+Control-c, Control-v, Control-d, and Control-a, respectively.
 
 The difference between 'Cut' and 'Delete' is that the former automatically
 copies the contents that were cut to the clipboard, while the latter does not.
 
-=head1 OPTIONS
+=head2 OPTIONS
 
--pattern
-   The pattern specified here creates an input mask for the LabPopEntry widget.
-There are six pre-defined masks:
+B<-pattern =E<gt>> I<string>
+
+S<   The pattern specified here creates an input mask for the LabPopEntry
+widget.  There are seven pre-defined masks:> 
+
+=over 4
+
+=item *
+
 alpha - Upper and lower case a-z only.
+
+=item *
+
 alphanum - Alpha-numeric characters only.
+
+=item *
+
 capsonly - Upper case A-Z only.
+
+=item *
+
 nondigit - Any characters except 0-9.
+
+=item *
+
 float - A float value, which may or may not include a decimal.
+
+=item *
+
 signed_int - A signed integer value, which may or may not include a '+'.
+
+=item *
+
 unsigned_int - An unsigned integer value.
 
-You may also specify a regular expression of your own design using Perl's
+=back
+
+S<You may also specify a regular expression of your own design using Perl's
 standard regular expression mechanisms.  Be sure to use single quotes, e.g.
- '/\d\w\d/'
+ '/\d\w\d/'>
 
--nomenu
-   If set to true, then no right-click menu will appear.  Presumably, you would
-set this if you were only interested in the input-mask functionality.
+B<-nomenu =E<gt>> I<B<0> or 1>
 
--nospace
-   If set to true, the user may not enter whitespace before, after or between
-words within that LabPopEntry widget.
+S<   If set to true, then no right-click menu will appear.  Presumably, you would
+set this if you were only interested in the input-mask functionality.  The
+default is, of course, 0.>
 
--maxwidth
-   Specifies the maximum number of characters that the user can enter in that
+B<-nospace =E<gt>> I<B<0> or 1>
+
+S<   If set to true (1), the user may not enter whitespace before, after or 
+between words within that LabPopEntry widget.  The default is 0.>
+
+B<-maxwidth =E<gt>> I<int>
+
+S<   Specifies the maximum number of characters that the user can enter in that
 particular LabPopEntry widget.  Note that this is not the same as the width
-of the widget itself.
+of the widget itself.>
 
--maxvalue
-   If one of the pre-defined numeric patterns is chosen, this specifies the
-maximum allowable value that may be entered by a user for the widget.
+B<-maxvalue =E<gt>> I<int or float>
 
--minvalue
-   If one of the pre-defined numeric patterns is chosen, this specifies the
-minimum allowable value for the first digit (0-9).  This should work better.
+S<   If one of the pre-defined numeric patterns is chosen, this specifies the
+maximum allowable value that may be entered by a user for the widget.>
 
--menuitems
-   If specified, this creates a user-defined right-click menu rather than
+B<-minvalue =E<gt>> I<int or float>
+
+S<   If one of the pre-defined numeric patterns is chosen, this specifies the
+minimum allowable value for the first digit (0-9).  This should work better.>
+
+B<-menuitems =E<gt>> 
+I<['string', 'callback', 'E<lt>bindingE<gt>', 'underline_index']>
+
+S<   If specified, this creates a user-defined right-click menu rather than
 the one that is provided by default.  The value specified must be a four
-element nested anonymous array that contains: 
+element nested anonymous array that contains (in this order):>
+
+=over 4
+
+=item 1
 
 a string that appears on the menu,
+
+=item 2
+
 a callback (in 'package::callback' syntax format), 
+
+=item 3
+
 a binding for that option (see below), 
-and an index value specifying where on the menu it should appear,  starting at 
-index 0.
 
-   The binding specified need only be in the form, '<Control-x>'.  You needn't
-explicitly bind it yourself.  Your callback will automatically be bound to
-the event sequence you specified.
+=item 4
 
-=head1 METHODS
+an index value specifying the character in the string to be underlined.
 
-deleteItem(index, ?index?)
+=back
 
-   Deletes the menu option at the specified index.  A range of values may be
-deleted as well, e.g. $dw->deleteItem(3,'end');  Returns an array reference
+S<The binding specified need only be in the form, 'E<lt>Control-xE<gt>'.  You
+needn't explicitly bind it yourself.  Your callback will automatically be
+bound to the event sequence you specified.>
+
+=head2 METHODS
+
+B<$lpe-E<gt>deleteItem(index, ?index?)> 
+
+S<   Deletes the menu option at the specified index.  A range of values may be
+deleted as well, e.g. $lpe-E<gt>deleteItem(3,'end');  Returns an array reference
 if a single item is deleted, or a reference to an array of references if more
-than one item is deleted.
+than one item is deleted.>
 
-addItem(?index?, $item)
-   Adds a menu option at the specified index, where $item is an anonymous array
+B<$lpe-E<gt>addItem(?index?, $item)>
+
+S<   Adds a menu option at the specified index, where $item is an anonymous array
 consisting of four elements (see the -menuitems option for details).  If no 
 index is specified, the new item will be added at the end of the menu.  If an
-item already exists at that index, the current menu items will be 
-"bumped" down.  Returns the list of menuitems.
-   
-=head1 KNOWN BUGS
+item already exists at that index, the current menu items will be "bumped"
+down.  Returns the list of menuitems.>
 
-The -pattern option "capsonly" will only work properly if no more than one 
-word is supplied.
+=head2 ADVERTISED SUBWIDGETS
+
+B<$lpe-E<gt>Subwidget('popupmenu')>
+
+S<Returns a reference to the popupmenu (a toplevel widget).>
+
+=head2 KNOWN BUGS
 
 The -minvalue only works for the first digit.
 
-It's possible to have a leading '.' and a following '.' in a float
+There is still potential for odd results if your bind happens to coincide
+with a binding already used by the Window Manager.  In windows, where I
+did most of my testing, this meant that Control-v would paste twice, once
+because MS Windows told it to, and once because I told it to.
 
-There is a bug with the 'delete' bind (Control-d).  It won't necessarily pick
-up the selection for some reason, and in some cases deletes individual
-characters per key-press, rather than the entire selection.  Weird.
-
-=head1 PLANNED CHANGES
+=head2 PLANNED CHANGES
 
 Fix the issues mentioned above.
 
-=head1 AUTHOR
+Automatically bind the 'Alt' key to the underlined character.
+
+Give the option to remove bindings completely.
+
+=head2 AUTHOR
 
 Daniel J. Berger
 djberg96@hotmail.com
 
-=head1 SEE ALSO
+=head2 SEE ALSO
 
-Entry
+Entry, LabEntry
 
 =cut
-

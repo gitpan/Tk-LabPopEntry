@@ -4,4 +4,3 @@ Makefile.PL
 LabPopEntry.pm
 test.pl
 README
-README.html
